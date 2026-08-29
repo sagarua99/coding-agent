@@ -1,0 +1,2 @@
+# Only one dependency: a HTTP client. Everything else is the standard library.
+requests>=2.31

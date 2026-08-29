@@ -1,0 +1,18 @@
+# Secrets — never commit
+.env
+
+# Runtime artifacts
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Sandbox workspace where the agent works
+workspace/
+
+# Local prep materials (video script, interview notes, submission README)
+demo/
+
+# Local junk
+.vscode/
+.DS_Store
