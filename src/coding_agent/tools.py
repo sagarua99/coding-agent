@@ -50,6 +50,41 @@ def _read(path: Path, max_chars: int) -> str:
     return data
 
 
+def _parse_skill_md(fallback_name: str, raw: str) -> tuple[str, str, str]:
+    """Parse a skill file's simple frontmatter block.
+
+    Format:
+        ---
+        name: python-testing
+        description: one-line summary
+        ---
+        <instructions body>
+
+    Returns (name, description, content) where `content` is the body with the
+    frontmatter stripped (kept readable for the model). Falls back gracefully
+    when the frontmatter is missing or malformed.
+    """
+    body = raw
+    name = fallback_name
+    description = "(no description)"
+    if raw.lstrip().startswith("---"):
+        # Split into (frontmatter, body) on the second '---' line.
+        parts = raw.split("---", 2)
+        if len(parts) >= 3:
+            fm = parts[1]
+            body = parts[2].lstrip("\n")
+            for line in fm.splitlines():
+                line = line.strip()
+                if ":" in line:
+                    k, _, v = line.partition(":")
+                    k, v = k.strip().lower(), v.strip()
+                    if k == "name" and v:
+                        name = v
+                    elif k == "description" and v:
+                        description = v
+    return name, description, body.strip()
+
+
 class ToolBox:
     """Collection of tools plus their JSON schemas for the LLM."""
 
@@ -137,6 +172,40 @@ class ToolBox:
             {
                 "type": "function",
                 "function": {
+                    "name": "list_skills",
+                    "description": (
+                        "List the reusable skills available in the skills "
+                        "directory, each with a one-line description. Call this "
+                        "before load_skill to see what is available."
+                    ),
+                    "parameters": {
+                        "type": "object",
+                        "properties": {},
+                    },
+                },
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "load_skill",
+                    "description": (
+                        "Load a reusable skill by name and return its full "
+                        "instructions. Once loaded, follow those instructions "
+                        "for the rest of the current task."
+                    ),
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "name": {"type": "string",
+                                     "description": "skill name (from list_skills)"},
+                        },
+                        "required": ["name"],
+                    },
+                },
+            },
+            {
+                "type": "function",
+                "function": {
                     "name": "run_command",
                     "description": (
                         "Run a shell command with the workspace as working directory "
@@ -161,6 +230,8 @@ class ToolBox:
             "write_file": self.write_file,
             "edit_file": self.edit_file,
             "list_files": self.list_files,
+            "list_skills": self.list_skills,
+            "load_skill": self.load_skill,
             "run_command": self.run_command,
         }
         handler = handlers.get(name)
@@ -239,6 +310,40 @@ class ToolBox:
         if not entries:
             return "(empty directory)"
         return "\n".join(entries)
+
+    # ------------------------------------------------------------------ skills
+    def list_skills(self) -> str:
+        """Return "<name>: <description>" for every skill in the skills dir."""
+        skills = self._scan_skills()
+        if not skills:
+            return "(no skills found)"
+        lines = []
+        for name, info in sorted(skills.items()):
+            lines.append(f"{name}: {info['description']}")
+        return "\n".join(lines)
+
+    def load_skill(self, name: str) -> str:
+        """Return the full SKILL.md content (frontmatter + instructions)."""
+        skills = self._scan_skills()
+        if name not in skills:
+            known = ", ".join(sorted(skills)) or "(none)"
+            return f"error: unknown skill '{name}'. available: {known}"
+        return skills[name]["content"]
+
+    def _scan_skills(self) -> dict[str, dict]:
+        """Scan `<skills_dir>/*/SKILL.md`, parsing a tiny YAML-ish frontmatter."""
+        root = self.cfg.skills_dir
+        if not root.is_dir():
+            return {}
+        found: dict[str, dict] = {}
+        for entry in sorted(root.iterdir()):
+            skill_file = entry / "SKILL.md"
+            if not entry.is_dir() or not skill_file.is_file():
+                continue
+            raw = skill_file.read_text(encoding="utf-8", errors="replace")
+            name, description, content = _parse_skill_md(entry.name, raw)
+            found[name] = {"description": description, "content": content}
+        return found
 
     def run_command(self, command: str) -> str:
         # `run_command` is given freedom to reach outside the workspace on

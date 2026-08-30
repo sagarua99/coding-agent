@@ -46,13 +46,19 @@ class Config:
     request_timeout: int = 300          # seconds, for a single LLM request
     max_retries: int = 3                # LLM request retries on transient errors
 
+    # --- Skills ----------------------------------------------------------------
+    # Directory of reusable skills (each as <name>/SKILL.md). Unlike the
+    # workspace sandbox, skills are read-only project resources, not sandboxed.
+    skills_dir: Path = field(default_factory=lambda: Path("skills"))
+
     # --- Workspace (sandbox) -------------------------------------------------
     # All file tools are confined inside this directory.
     workspace: Path = field(default_factory=lambda: Path("workspace").resolve())
 
     def resolve(self, base: Path) -> "Config":
-        # Make the workspace absolute relative to the caller.
+        # Make the workspace and skills dir absolute relative to the caller.
         self.workspace = (base / self.workspace).resolve()
+        self.skills_dir = (base / self.skills_dir).resolve()
         return self
 
     @staticmethod
@@ -72,5 +78,6 @@ class Config:
             request_timeout=int(os.environ.get("REQUEST_TIMEOUT", "300")),
             max_retries=int(os.environ.get("MAX_RETRIES", "3")),
             workspace=Path(os.environ.get("WORKSPACE", "workspace")),
+            skills_dir=Path(os.environ.get("SKILLS_DIR", "skills")),
         )
         return cfg

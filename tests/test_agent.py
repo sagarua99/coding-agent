@@ -60,6 +60,49 @@ class TestSandbox(unittest.TestCase):
         self.assertIn("unknown tool", out)
 
 
+class TestSkills(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        root = Path(self.tmp.name)
+        (root / "python-testing" / "SKILL.md").parent.mkdir(parents=True)
+        (root / "python-testing" / "SKILL.md").write_text(
+            "---\nname: python-testing\n"
+            "description: write & run unittest tests\n"
+            "---\nBody of skill.\n", encoding="utf-8")
+        (root / "no-frontmatter" / "SKILL.md").parent.mkdir()
+        (root / "no-frontmatter" / "SKILL.md").write_text(
+            "Just a body without frontmatter.\n", encoding="utf-8")
+        (root / "not-a-skill").mkdir()
+        (root / "not-a-skill" / "README.txt").write_text("x", encoding="utf-8")
+        self.cfg = Config(workspace=Path(self.tmp.name) / "ws",
+                          skills_dir=root)
+        self.box = ToolBox(self.cfg)
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def test_list_skills(self):
+        out = self.box.list_skills()
+        self.assertIn("python-testing", out)
+        self.assertIn("write & run unittest tests", out)
+        # dir without SKILL.md must not be listed
+        self.assertNotIn("not-a-skill", out)
+
+    def test_load_skill_returns_body(self):
+        out = self.box.load_skill("python-testing")
+        self.assertIn("Body of skill.", out)
+        # frontmatter stripped from returned content
+        self.assertNotIn("write & run unittest", out)
+
+    def test_load_unknown_skill(self):
+        out = self.box.load_skill("nope")
+        self.assertIn("unknown skill", out)
+
+    def test_parse_fallback_without_frontmatter(self):
+        out = self.box.load_skill("no-frontmatter")
+        self.assertIn("Just a body", out)
+
+
 class TestRunCommand(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()

@@ -34,6 +34,37 @@ python run.py --mock "..."           # offline run with a scripted fake LLM
 python tests/test_agent.py           # unit tests (stdlib only)
 ```
 
+## Skills
+
+Reusable **skills** let you bundle recurring instructions as small markdown
+files that the agent loads on demand. A skill is a directory with a
+`SKILL.md`:
+
+```
+skills/
+  python-testing/SKILL.md
+  code-review/SKILL.md
+```
+
+`SKILL.md` format (simple frontmatter + instructions):
+
+```markdown
+---
+name: python-testing
+description: Write and run Python unit tests (stdlib unittest) and verify they pass.
+---
+
+1. Put tests in `<module>_test.py` using only stdlib `unittest`.
+2. Cover happy path, edge cases, and error cases.
+3. Run with: `python -m unittest <module>_test -v`
+...
+```
+
+The agent discovers skills with the `list_skills` tool and loads one with
+`load_skill`; once loaded, it follows those instructions for the rest of the
+task. Add a new skill by creating another directory under `skills/` (or the
+`SKILLS_DIR` of your choice).
+
 ## How it works
 
 The agent is a single deterministic loop (`src/coding_agent/agent.py`):
@@ -54,7 +85,7 @@ Termination is triggered by (a) the model answering without tool calls,
 |------|----------------|
 | `config.py`   | Env / `.env` configuration (hand-written dotenv loader) |
 | `llm.py`      | OpenAI-compatible chat-completions client over `requests`, tool calling, retry/backoff |
-| `tools.py`    | `read_file`, `write_file`, `edit_file`, `list_files`, `run_command` + workspace sandbox |
+| `tools.py`    | `read_file`, `write_file`, `edit_file`, `list_files`, `run_command`, `list_skills`, `load_skill` + workspace sandbox |
 | `context.py`  | Conversation history; character-budget based compaction |
 | `prompts.py`  | System prompt (the agent's behavioural contract) |
 | `agent.py`    | The reasoning loop, argument parsing, termination, error handling |
@@ -91,6 +122,7 @@ Termination is triggered by (a) the model answering without tool calls,
 | `LLM_BASE_URL` | `https://api.deepseek.com/v1` | OpenAI-compatible endpoint |
 | `LLM_MODEL` | `deepseek-chat` | Model name |
 | `WORKSPACE` | `./workspace` | Sandbox root the agent works in |
+| `SKILLS_DIR` | `./skills` | Directory containing reusable skills |
 | `MAX_ITERATIONS` | `40` | Loop step budget |
 | `MAX_TOOL_OUTPUT_CHARS` | `8000` | Truncation for huge tool results |
 | `CONTEXT_CHAR_BUDGET` | `36000` | Approx. history size before compaction |
@@ -104,6 +136,7 @@ Termination is triggered by (a) the model answering without tool calls,
 ```
 src/coding_agent/   the agent package
 tests/              unit tests (stdlib unittest)
+skills/             reusable skills (<name>/SKILL.md)
 workspace/          sandbox where the agent works (git-ignored)
 run.py              convenience launcher
 ```
