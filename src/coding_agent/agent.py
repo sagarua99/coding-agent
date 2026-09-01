@@ -61,17 +61,37 @@ class Agent:
 
     # ------------------------------------------------------------------ public
     def run(self, task: str, stream: bool = False) -> str:
-        """Run the agent on `task`. Returns the final answer text.
+        """Run the agent on `task` as a fresh conversation.
 
-        `stream` toggles a human-friendly printout of every step, which is
-        what we show during the demo video.
+        Returns the final answer text. `stream` toggles a human-friendly
+        printout of every step, which is what we show during the demo video.
         """
         self.context.reset()
         self.records.clear()
         self.context.append({"role": "user", "content": task})
         if stream:
             self._say(f"\n> Task: {task}\n")
+        return self._loop(stream)
 
+    def load_history(self, history: list[dict]) -> None:
+        """Restore a saved conversation (see `sessions.load_session`)."""
+        self.context.history = list(history)
+
+    def continue_run(self, task: str | None = None, stream: bool = False) -> str:
+        """Continue the conversation already in `self.context`.
+
+        Used after `load_history` so a previous session can be resumed from its
+        stopping point. Appends `task` as a new user message when one is given.
+        """
+        self.records.clear()
+        if task:
+            self.context.append({"role": "user", "content": task})
+            if stream:
+                self._say(f"\n> Task: {task}\n")
+        return self._loop(stream)
+
+    def _loop(self, stream: bool) -> str:
+        """The reasoning/tool loop; shared by fresh runs and resumed ones."""
         for step in range(1, self.cfg.max_iterations + 1):
             try:
                 message = self.llm.chat(self.context.messages(), self.tools.schemas())

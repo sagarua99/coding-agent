@@ -14,6 +14,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 from coding_agent.agent import Agent
 from coding_agent.config import Config
 from coding_agent.context import Context
+from coding_agent.sessions import list_sessions, load_session, save_session
 from coding_agent.tools import ToolBox
 
 
@@ -156,6 +157,64 @@ class TestArgParsing(unittest.TestCase):
     def test_garbage(self):
         args, err = Agent._parse_args("f", "not json at all")
         self.assertIsNotNone(err)
+
+
+class _FinalLLM:
+    """Scripted LLM that just answers immediately (no tools)."""
+
+    def chat(self, messages, tools):
+        return {"role": "assistant", "content": "ok"}
+
+
+class TestSessions(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self.tmp.name)
+        self.logs = self.root / "logs"
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def test_save_load_roundtrip(self):
+        history = [
+            {"role": "user", "content": "hi"},
+            {"role": "assistant", "content": "",
+             "tool_calls": [{"id": "c1", "type": "function",
+                             "function": {"name": "read_file",
+                                          "arguments": '{"path": "a.txt"}'}}]},
+            {"role": "tool", "tool_call_id": "c1", "name": "read_file",
+             "content": "file body 世界"},
+        ]
+        path = save_session(history, "some task", "done", self.logs)
+        self.assertTrue(path.is_file())
+        data = load_session(path)
+        self.assertEqual(data["history"], history)
+        self.assertEqual(data["final_answer"], "done")
+
+    def test_list_sessions_newest_first(self):
+        save_session([{"role": "user", "content": "a"}], "t1", "a1", self.logs)
+        save_session([{"role": "user", "content": "b"}], "t2", "b2", self.logs)
+        listed = list_sessions(self.logs)
+        self.assertEqual(len(listed), 2)
+        # Files are timestamped, so a descending sort == newest first.
+        self.assertEqual(load_session(listed[0])["task"], "t2")
+
+    def test_resume_keeps_prior_history(self):
+        cfg = Config(workspace=self.root / "ws")
+        agent = Agent(cfg, llm=_FinalLLM())
+        agent.run("first task", stream=False)
+        contents = [m.get("content") for m in agent.context.history]
+        self.assertIn("first task", contents)
+
+        # Reload into a fresh agent exactly as `--resume` would.
+        path = save_session(agent.context.history, "first task", "ok", self.logs)
+        fresh = Agent(cfg, llm=_FinalLLM())
+        fresh.load_history(load_session(path)["history"])
+        answer = fresh.continue_run("follow up", stream=False)
+        self.assertEqual(answer, "ok")
+        contents = [m.get("content") for m in fresh.context.history]
+        self.assertIn("first task", contents)  # old conversation kept
+        self.assertIn("follow up", contents)   # new user message appended
 
 
 if __name__ == "__main__":

@@ -10,6 +10,9 @@ venv/
 # Sandbox workspace where the agent works
 workspace/
 
+# Saved conversation sessions (audit trail, git-ignored as generated output)
+logs/
+
 # Local prep materials (video script, interview notes, submission README)
 demo/
 

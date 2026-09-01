@@ -55,10 +55,15 @@ class Config:
     # All file tools are confined inside this directory.
     workspace: Path = field(default_factory=lambda: Path("workspace").resolve())
 
+    # --- Sessions ------------------------------------------------------------
+    # Where conversation sessions are saved after every run (`session-*.json`).
+    logs_dir: Path = field(default_factory=lambda: Path("logs"))
+
     def resolve(self, base: Path) -> "Config":
-        # Make the workspace and skills dir absolute relative to the caller.
+        # Make the paths absolute relative to the caller.
         self.workspace = (base / self.workspace).resolve()
         self.skills_dir = (base / self.skills_dir).resolve()
+        self.logs_dir = (base / self.logs_dir).resolve()
         return self
 
     @staticmethod
@@ -79,5 +84,6 @@ class Config:
             max_retries=int(os.environ.get("MAX_RETRIES", "3")),
             workspace=Path(os.environ.get("WORKSPACE", "workspace")),
             skills_dir=Path(os.environ.get("SKILLS_DIR", "skills")),
+            logs_dir=Path(os.environ.get("LOGS_DIR", "logs")),
         )
         return cfg

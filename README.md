@@ -32,6 +32,10 @@ python run.py "create a fib.py and run it with a test"
 python run.py --interactive          # REPL mode
 python run.py --mock "..."           # offline run with a scripted fake LLM
 python tests/test_agent.py           # unit tests (stdlib only)
+
+# Conversation sessions are saved after every run; resume or inspect them:
+python run.py --list-sessions
+python run.py --resume logs/session-*.json "now make it faster"
 ```
 
 ## Skills
@@ -64,6 +68,23 @@ The agent discovers skills with the `list_skills` tool and loads one with
 `load_skill`; once loaded, it follows those instructions for the rest of the
 task. Add a new skill by creating another directory under `skills/` (or the
 `SKILLS_DIR` of your choice).
+
+## Sessions
+
+Every run saves its full conversation history to a JSON file under `logs/`
+(`session-<timestamp>.json`), along with the task and the final answer. That
+makes the run auditable later, and lets you **continue from the stopping
+point** instead of starting over:
+
+```
+$ python run.py "write a fib.py"                      # → logs/session-20260902-...json
+$ python run.py --list-sessions                       # show saved sessions
+$ python run.py --resume logs/session-...json "extend it"   # continue from there
+```
+
+Resuming loads the previous history, appends the new request as a user
+message, and keeps running the loop. `--resume` also works with
+`--interactive`. Set the directory with `--logs-dir` or `LOGS_DIR`.
 
 ## How it works
 
@@ -123,6 +144,7 @@ Termination is triggered by (a) the model answering without tool calls,
 | `LLM_MODEL` | `deepseek-chat` | Model name |
 | `WORKSPACE` | `./workspace` | Sandbox root the agent works in |
 | `SKILLS_DIR` | `./skills` | Directory containing reusable skills |
+| `LOGS_DIR` | `./logs` | Where conversation sessions are saved |
 | `MAX_ITERATIONS` | `40` | Loop step budget |
 | `MAX_TOOL_OUTPUT_CHARS` | `8000` | Truncation for huge tool results |
 | `CONTEXT_CHAR_BUDGET` | `36000` | Approx. history size before compaction |
@@ -138,5 +160,6 @@ src/coding_agent/   the agent package
 tests/              unit tests (stdlib unittest)
 skills/             reusable skills (<name>/SKILL.md)
 workspace/          sandbox where the agent works (git-ignored)
+logs/               saved conversation sessions (git-ignored)
 run.py              convenience launcher
 ```
